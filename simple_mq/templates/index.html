@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简易消息中间件</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container-fluid {
+            padding-top: 20px;
+        }
+        .section {
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #f8f9fa;
+        }
+        .log-area {
+            height: 300px;
+            overflow-y: auto;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .messages-area {
+            height: 200px;
+            overflow-y: auto;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        h5 {
+            color: #0d6efd;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <h1 class="text-center mb-4">简易消息中间件系统</h1>
+        
+        <div class="row">
+            <!-- 左侧操作区 -->
+            <div class="col-md-4">
+                <div class="section">
+                    <h5>主题管理</h5>
+                    <div class="mb-3">
+                        <label for="topicName" class="form-label">主题名称</label>
+                        <input type="text" class="form-control" id="topicName" placeholder="输入主题名称">
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="createTopic()">创建主题</button>
+                    <button type="button" class="btn btn-danger" onclick="deleteTopic()">删除主题</button>
+                </div>
+                
+                <div class="section">
+                    <h5>生产者操作</h5>
+                    <div class="mb-3">
+                        <label for="producerId" class="form-label">生产者ID</label>
+                        <input type="text" class="form-control" id="producerId" placeholder="输入生产者ID">
+                    </div>
+                    <button type="button" class="btn btn-success mb-3" onclick="createProducer()">创建生产者</button>
+                    
+                    <div class="mb-3">
+                        <label for="producerTopic" class="form-label">主题名称</label>
+                        <input type="text" class="form-control" id="producerTopic" placeholder="输入主题名称">
+                    </div>
+                    <div class="mb-3">
+                        <label for="messageContent" class="form-label">消息内容</label>
+                        <textarea class="form-control" id="messageContent" rows="2" placeholder="输入消息内容"></textarea>
+                    </div>
+                    <button type="button" class="btn btn-warning" onclick="publishMessage()">发布消息</button>
+                </div>
+                
+                <div class="section">
+                    <h5>观察者操作</h5>
+                    <div class="mb-3">
+                        <label for="observerId" class="form-label">观察者ID</label>
+                        <input type="text" class="form-control" id="observerId" placeholder="输入观察者ID">
+                    </div>
+                    <button type="button" class="btn btn-success mb-3" onclick="createObserver()">创建观察者</button>
+                    
+                    <div class="mb-3">
+                        <label for="observerTopic" class="form-label">主题名称</label>
+                        <input type="text" class="form-control" id="observerTopic" placeholder="输入主题名称">
+                    </div>
+                    <button type="button" class="btn btn-info" onclick="subscribeTopic()">订阅主题</button>
+                    <button type="button" class="btn btn-secondary" onclick="unsubscribeTopic()">取消订阅</button>
+                </div>
+            </div>
+            
+            <!-- 右侧展示区 -->
+            <div class="col-md-8">
+                <div class="section">
+                    <h5>观察者消息列表</h5>
+                    <div class="mb-3">
+                        <label for="observerSelect" class="form-label">选择观察者</label>
+                        <select class="form-select" id="observerSelect" onchange="loadObserverMessages()">
+                            <option value="">请选择观察者</option>
+                        </select>
+                    </div>
+                    <div class="messages-area" id="observerMessages">
+                        暂无消息...
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h5>消息流转日志</h5>
+                    <div class="log-area" id="messageLogs">
+                        暂无日志...
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" type="button" onclick="testThroughput()">吞吐率测试</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // 页面加载完成后自动刷新消息和日志
+        window.onload = function() {
+            loadMessageLogs();
+            setInterval(loadMessageLogs, 1000); // 每秒刷新一次日志
+            setInterval(loadObserverMessages, 1000); // 每秒刷新一次观察者消息
+        };
+
+        // 创建主题
+        function createTopic() {
+            const topicName = document.getElementById('topicName').value;
+            if (!topicName) {
+                alert('请输入主题名称');
+                return;
+            }
+            
+            fetch('/create_topic', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({topic_name: topicName})
+            })
+            .then(response => {
+                console.log('Create topic response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Create topic success data:', data);
+                alert(data.msg);
+                document.getElementById('topicName').value = '';
+            })
+            .catch(error => {
+                console.error('Create topic fetch error:', error);
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 删除主题
+        function deleteTopic() {
+            const topicName = document.getElementById('topicName').value;
+            if (!topicName) {
+                alert('请输入主题名称');
+                return;
+            }
+            
+            fetch('/delete_topic', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({topic_name: topicName})
+            })
+            .then(response => {
+                console.log('Delete topic response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Delete topic success data:', data);
+                alert(data.msg);
+                document.getElementById('topicName').value = '';
+            })
+            .catch(error => {
+                console.error('Delete topic fetch error:', error);
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 创建生产者
+        function createProducer() {
+            const producerId = document.getElementById('producerId').value;
+            if (!producerId) {
+                alert('请输入生产者ID');
+                return;
+            }
+            
+            fetch('/create_producer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({producer_id: producerId})
+            })
+            .then(response => {
+                console.log('Create producer response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Create producer success data:', data);
+                alert(data.msg);
+                document.getElementById('producerId').value = '';
+            })
+            .catch(error => {
+                console.error('Create producer fetch error:', error);
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 发布消息
+        function publishMessage() {
+            const producerId = document.getElementById('producerId').value;
+            const topicName = document.getElementById('producerTopic').value;
+            const messageContent = document.getElementById('messageContent').value;
+            
+            if (!producerId || !topicName || !messageContent) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            fetch('/publish_message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    producer_id: producerId,
+                    topic_name: topicName,
+                    message_content: messageContent
+                })
+            })
+            .then(response => {
+                console.log('Publish message response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Publish message success data:', data);
+                alert(data.msg);
+                document.getElementById('producerTopic').value = '';
+                document.getElementById('messageContent').value = '';
+            })
+            .catch(error => {
+                console.error('Publish message fetch error:', error);
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 创建观察者
+        function createObserver() {
+            const observerId = document.getElementById('observerId').value;
+            if (!observerId) {
+                alert('请输入观察者ID');
+                return;
+            }
+            
+            fetch('/create_observer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({observer_id: observerId})
+            })
+            .then(response => {
+                console.log('Create observer response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Create observer success data:', data);
+                alert(data.msg);
+                // 更新观察者下拉列表
+                const select = document.getElementById('observerSelect');
+                const option = document.createElement('option');
+                option.value = observerId;
+                option.text = observerId;
+                select.appendChild(option);
+                document.getElementById('observerId').value = '';
+            })
+            .catch(error => {
+                console.error('Create observer fetch error:', error);
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 订阅主题
+        function subscribeTopic() {
+            const observerId = document.getElementById('observerId').value;
+            const topicName = document.getElementById('observerTopic').value;
+            
+            if (!observerId || !topicName) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            fetch('/subscribe_topic', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    observer_id: observerId,
+                    topic_name: topicName
+                })
+            })
+            .then(response => {
+                console.log('Subscribe topic response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Subscribe topic success data:', data);
+                alert(data.msg);
+                document.getElementById('observerTopic').value = '';
+            })
+            .catch(error => {
+                console.error('Subscribe topic fetch error:', error);
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 取消订阅主题
+        function unsubscribeTopic() {
+            const observerId = document.getElementById('observerId').value;
+            const topicName = document.getElementById('observerTopic').value;
+            
+            if (!observerId || !topicName) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            fetch('/unsubscribe_topic', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    observer_id: observerId,
+                    topic_name: topicName
+                })
+            })
+            .then(response => {
+                console.log('Unsubscribe topic response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Unsubscribe topic success data:', data);
+                alert(data.msg);
+                document.getElementById('observerTopic').value = '';
+            })
+            .catch(error => {
+                console.error('Unsubscribe topic fetch error:', error);
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 加载消息日志
+        function loadMessageLogs() {
+            fetch('/get_message_logs')
+            .then(response => {
+                console.log('Load message logs response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const logArea = document.getElementById('messageLogs');
+                if (data.logs.length === 0) {
+                    logArea.innerHTML = '暂无日志...';
+                } else {
+                    logArea.innerHTML = data.logs.join('<br>');
+                }
+                // 滚动到底部
+                logArea.scrollTop = logArea.scrollHeight;
+            })
+            .catch(error => {
+                console.error('Load message logs fetch error:', error);
+                // 不弹出错误提示，因为这个是后台自动刷新功能
+            });
+        }
+
+        // 加载观察者消息
+        function loadObserverMessages() {
+            const observerId = document.getElementById('observerSelect').value;
+            if (!observerId) return;
+            
+            fetch('/get_observer_messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({observer_id: observerId})
+            })
+            .then(response => {
+                console.log('Load observer messages response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const messagesArea = document.getElementById('observerMessages');
+                if (data.messages.length === 0) {
+                    messagesArea.innerHTML = '暂无消息...';
+                } else {
+                    messagesArea.innerHTML = data.messages.join('<br>');
+                }
+                // 滚动到底部
+                messagesArea.scrollTop = messagesArea.scrollHeight;
+            })
+            .catch(error => {
+                console.error('Load observer messages fetch error:', error);
+                // 不弹出错误提示，因为这个是后台自动刷新功能
+            });
+        }
+
+        // 吞吐率测试
+        function testThroughput() {
+            if (!confirm('开始进行吞吐率测试，测试时长60秒，是否继续？')) {
+                return;
+            }
+            
+            fetch('/test_throughput')
+            .then(response => {
+                console.log('Test throughput response:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Test throughput success data:', data);
+                alert(`测试完成\n测试时长: ${data.test_duration}秒\n总消息数: ${data.total_messages}条\n吞吐率: ${data.throughput}`);
+            })
+            .catch(error => {
+                console.error('Test throughput fetch error:', error);
+                alert('测试失败: ' + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
