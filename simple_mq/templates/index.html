@@ -54,7 +54,8 @@
                     <h5>主题管理</h5>
                     <div class="mb-3">
                         <label for="topicName" class="form-label">主题名称</label>
-                        <input type="text" class="form-control" id="topicName" placeholder="输入主题名称">
+                        <input type="text" class="form-control" id="topicName" placeholder="输入主题名称" list="topicList">
+                        <datalist id="topicList"></datalist>
                     </div>
                     <button type="button" class="btn btn-primary" onclick="createTopic()">创建主题</button>
                     <button type="button" class="btn btn-danger" onclick="deleteTopic()">删除主题</button>
@@ -64,13 +65,15 @@
                     <h5>生产者操作</h5>
                     <div class="mb-3">
                         <label for="producerId" class="form-label">生产者ID</label>
-                        <input type="text" class="form-control" id="producerId" placeholder="输入生产者ID">
+                        <input type="text" class="form-control" id="producerId" placeholder="输入生产者ID" list="producerList">
+                        <datalist id="producerList"></datalist>
                     </div>
                     <button type="button" class="btn btn-success mb-3" onclick="createProducer()">创建生产者</button>
                     
                     <div class="mb-3">
                         <label for="producerTopic" class="form-label">主题名称</label>
-                        <input type="text" class="form-control" id="producerTopic" placeholder="输入主题名称">
+                        <input type="text" class="form-control" id="producerTopic" placeholder="输入主题名称" list="producerTopicList">
+                        <datalist id="producerTopicList"></datalist>
                     </div>
                     <div class="mb-3">
                         <label for="messageContent" class="form-label">消息内容</label>
@@ -83,16 +86,24 @@
                     <h5>观察者操作</h5>
                     <div class="mb-3">
                         <label for="observerId" class="form-label">观察者ID</label>
-                        <input type="text" class="form-control" id="observerId" placeholder="输入观察者ID">
+                        <input type="text" class="form-control" id="observerId" placeholder="输入观察者ID" list="observerList">
+                        <datalist id="observerList"></datalist>
                     </div>
                     <button type="button" class="btn btn-success mb-3" onclick="createObserver()">创建观察者</button>
                     
                     <div class="mb-3">
                         <label for="observerTopic" class="form-label">主题名称</label>
-                        <input type="text" class="form-control" id="observerTopic" placeholder="输入主题名称">
+                        <input type="text" class="form-control" id="observerTopic" placeholder="输入主题名称" list="observerTopicList">
+                        <datalist id="observerTopicList"></datalist>
                     </div>
                     <button type="button" class="btn btn-info" onclick="subscribeTopic()">订阅主题</button>
                     <button type="button" class="btn btn-secondary" onclick="unsubscribeTopic()">取消订阅</button>
+                </div>
+                
+                <div class="section">
+                    <h5>配置管理</h5>
+                    <button type="button" class="btn btn-primary" onclick="loadConfig()">加载配置</button>
+                    <button type="button" class="btn btn-success" onclick="saveConfig()">保存当前配置</button>
                 </div>
             </div>
             
@@ -118,8 +129,12 @@
                     </div>
                 </div>
                 
-                <div class="d-grid gap-2">
-                    <button class="btn btn-primary" type="button" onclick="testThroughput()">吞吐率测试</button>
+                <div class="section">
+                    <h5>性能测试</h5>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" type="button" onclick="testThroughput()">吞吐率测试 (默认)</button>
+                        <button class="btn btn-secondary" type="button" onclick="runBenchmark()">性能基准测试</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -131,11 +146,71 @@
     <script>
         // 页面加载完成后自动刷新消息和日志
         window.onload = function() {
+            loadEntities();  // 加载所有实体
             loadMessageLogs();
             setInterval(loadMessageLogs, 1000); // 每秒刷新一次日志
             setInterval(loadObserverMessages, 1000); // 每秒刷新一次观察者消息
         };
-
+        
+        // 加载所有实体信息
+        function loadEntities() {
+            fetch('/get_entities')
+            .then(response => response.json())
+            .then(data => {
+                // 填充主题下拉列表
+                populateDatalist('topicList', data.topics);
+                populateDatalist('producerTopicList', data.topics);
+                populateDatalist('observerTopicList', data.topics);
+                
+                // 填充生产者下拉列表
+                populateDatalist('producerList', data.producers);
+                
+                // 填充观察者下拉列表
+                populateDatalist('observerList', data.observers);
+                populateSelect('observerSelect', data.observers);
+            })
+            .catch(error => {
+                console.error('加载实体信息失败:', error);
+            });
+        }
+        
+        // 填充datalist
+        function populateDatalist(datalistId, options) {
+            const datalistElement = document.getElementById(datalistId);
+            // 清空现有选项
+            datalistElement.innerHTML = '';
+            // 添加选项
+            options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option;
+                datalistElement.appendChild(opt);
+            });
+        }
+        
+        // 填充select下拉框
+        function populateSelect(selectId, options) {
+            const selectElement = document.getElementById(selectId);
+            const currentValue = selectElement.value;
+            
+            // 保留第一个选项（提示文本）
+            const firstOption = selectElement.options[0];
+            selectElement.innerHTML = '';
+            selectElement.appendChild(firstOption);
+            
+            // 添加选项
+            options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option;
+                opt.textContent = option;
+                selectElement.appendChild(opt);
+            });
+            
+            // 如果之前的值还在选项中，则保持选中
+            if (options.includes(currentValue)) {
+                selectElement.value = currentValue;
+            }
+        }
+        
         // 创建主题
         function createTopic() {
             const topicName = document.getElementById('topicName').value;
@@ -162,6 +237,7 @@
                 console.log('Create topic success data:', data);
                 alert(data.msg);
                 document.getElementById('topicName').value = '';
+                loadEntities();  // 重新加载实体列表
             })
             .catch(error => {
                 console.error('Create topic fetch error:', error);
@@ -195,6 +271,7 @@
                 console.log('Delete topic success data:', data);
                 alert(data.msg);
                 document.getElementById('topicName').value = '';
+                loadEntities();  // 重新加载实体列表
             })
             .catch(error => {
                 console.error('Delete topic fetch error:', error);
@@ -228,6 +305,7 @@
                 console.log('Create producer success data:', data);
                 alert(data.msg);
                 document.getElementById('producerId').value = '';
+                loadEntities();  // 重新加载实体列表
             })
             .catch(error => {
                 console.error('Create producer fetch error:', error);
@@ -302,11 +380,7 @@
                 console.log('Create observer success data:', data);
                 alert(data.msg);
                 // 更新观察者下拉列表
-                const select = document.getElementById('observerSelect');
-                const option = document.createElement('option');
-                option.value = observerId;
-                option.text = observerId;
-                select.appendChild(option);
+                loadEntities();  // 重新加载实体列表
                 document.getElementById('observerId').value = '';
             })
             .catch(error => {
@@ -468,11 +542,94 @@
             })
             .then(data => {
                 console.log('Test throughput success data:', data);
-                alert(`测试完成\n测试时长: ${data.test_duration}秒\n总消息数: ${data.total_messages}条\n吞吐率: ${data.throughput}`);
+                alert(`测试完成\n测试时长: ${data.test_duration.toFixed(2)}秒\n总消息数: ${data.total_messages}条\n吞吐率: ${data.throughput_msg_per_sec}\n数据传输速率: ${data.throughput_kb_per_sec}`);
+                loadEntities();  // 重新加载实体列表（可能有测试产生的实体）
             })
             .catch(error => {
                 console.error('Test throughput fetch error:', error);
                 alert('测试失败: ' + error.message);
+            });
+        }
+        
+        // 加载配置
+        function loadConfig() {
+            fetch('/load_config', {
+                method: 'POST'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert(data.msg);
+                if (data.success) {
+                    // 更新实体列表
+                    populateDatalist('topicList', data.entities.topics);
+                    populateDatalist('producerTopicList', data.entities.topics);
+                    populateDatalist('observerTopicList', data.entities.topics);
+                    populateDatalist('producerList', data.entities.producers);
+                    populateDatalist('observerList', data.entities.observers);
+                    populateSelect('observerSelect', data.entities.observers);
+                }
+            })
+            .catch(error => {
+                console.error('Load config fetch error:', error);
+                alert('操作失败: ' + error.message);
+            });
+        }
+        
+        // 保存配置
+        function saveConfig() {
+            fetch('/save_config', {
+                method: 'POST'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert(data.msg);
+            })
+            .catch(error => {
+                console.error('Save config fetch error:', error);
+                alert('操作失败: ' + error.message);
+            });
+        }
+        
+        // 运行基准测试
+        function runBenchmark() {
+            if (!confirm('开始进行基准测试，测试多种消息大小，是否继续？')) {
+                return;
+            }
+            
+            fetch('/benchmark')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                let resultText = "基准测试完成:\n\n";
+                data.results.forEach((result, index) => {
+                    const sizeKB = result.message_size / 1024;
+                    const sizeText = sizeKB >= 1 ? `${sizeKB}KB` : `${result.message_size}B`;
+                    resultText += `测试 ${index+1}:\n`;
+                    resultText += `  消息大小: ${sizeText}\n`;
+                    resultText += `  总消息数: ${result.total_messages}条\n`;
+                    resultText += `  测试时长: ${result.duration.toFixed(2)}秒\n`;
+                    resultText += `  吞吐率: ${result.throughput_msg_per_sec.toFixed(2)}条/秒\n`;
+                    resultText += `  数据传输速率: ${result.throughput_kb_per_sec.toFixed(2)}KB/秒\n\n`;
+                });
+                alert(resultText);
+            })
+            .catch(error => {
+                console.error('Benchmark fetch error:', error);
+                alert('基准测试失败: ' + error.message);
             });
         }
     </script>

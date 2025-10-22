@@ -1,4 +1,6 @@
 # middleware_core.py
+import json
+import os
 from abc import ABCMeta, abstractmethod
 import datetime
 
@@ -91,12 +93,14 @@ class MessageProducer:
         return True, f"消息发布成功：{full_message}"
 
 class MiddlewareCore:
-    def __init__(self):
-        self.topics = {}               # 主题字典：key=主题名称，value=TopicSubject实例
-        self.producers = {}            # 生产者字典：key=生产者ID，value=MessageProducer实例
-        self.observers = {}            # 观察者字典：key=观察者ID，value=ConsumerObserver实例
-        self.message_logs = []         # 消息日志列表（用于网页展示全流程）
-    
+    def __init__(self, config_file='config.json'):
+        self.config_file = config_file    # 配置文件路径
+        self.topics = {}                  # 主题字典：key=主题名称，value=TopicSubject实例
+        self.producers = {}               # 生产者字典：key=生产者ID，value=MessageProducer实例
+        self.observers = {}               # 观察者字典：key=观察者ID，value=ConsumerObserver实例
+        self.message_logs = []            # 消息日志列表（用于网页展示全流程）
+        # 注意：不再自动加载配置文件，需要用户手动点击加载按钮
+        
     # 主题管理
     def create_topic(self, topic_name):
         """创建主题：若主题不存在则新建"""
@@ -111,8 +115,8 @@ class MiddlewareCore:
         if topic_name in self.topics:
             topic = self.topics.pop(topic_name)
             # 取消该主题的所有观察者订阅
-            for observer in topic.observers:
-                observer.subscribed_topics.remove(topic_name)
+            for observer in list(topic.observers):  # 使用list()避免在迭代时修改列表
+                topic.remove_observer(observer)
             self.add_message_log(f"删除主题：「{topic_name}」")
             return True, f"主题「{topic_name}」删除成功"
         return False, f"主题「{topic_name}」不存在"
@@ -184,3 +188,114 @@ class MiddlewareCore:
         if not observer:
             return []
         return observer.received_messages
+    
+    # 配置文件管理
+    def save_config(self):
+        """保存当前状态到配置文件"""
+        # 构建订阅关系
+        subscriptions = {}
+        for observer_id, observer in self.observers.items():
+            if observer.subscribed_topics:
+                subscriptions[observer_id] = observer.subscribed_topics
+        
+        config = {
+            'topics': list(self.topics.keys()),
+            'producers': list(self.producers.keys()),
+            'observers': list(self.observers.keys()),
+            'subscriptions': subscriptions
+        }
+        
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+            self.add_message_log("配置已保存到文件")
+            return True, "配置保存成功"
+        except Exception as e:
+            error_msg = f"保存配置文件失败：{str(e)}"
+            self.add_message_log(error_msg)
+            return False, error_msg
+    
+    def load_config(self):
+        """从配置文件加载预设配置"""
+        if not os.path.exists(self.config_file):
+            msg = "配置文件不存在"
+            self.add_message_log(msg)
+            return False, msg
+            
+        try:
+            with open(self.config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            # 清除现有数据
+            self._clear_all_entities()
+            
+            # 加载预设主题
+            topics = config.get('topics', [])
+            for topic_name in topics:
+                if topic_name not in self.topics:
+                    self.topics[topic_name] = TopicSubject(topic_name)
+                    self.add_message_log(f"从配置文件加载主题：「{topic_name}」")
+            
+            # 加载预设生产者
+            producers = config.get('producers', [])
+            for producer_id in producers:
+                if producer_id not in self.producers:
+                    self.producers[producer_id] = MessageProducer(producer_id)
+                    self.add_message_log(f"从配置文件加载生产者：生产者{producer_id}")
+            
+            # 加载预设观察者
+            observers = config.get('observers', [])
+            for observer_id in observers:
+                if observer_id not in self.observers:
+                    self.observers[observer_id] = ConsumerObserver(observer_id)
+                    self.add_message_log(f"从配置文件加载观察者：观察者{observer_id}")
+            
+            # 加载订阅关系
+            subscriptions = config.get('subscriptions', {})
+            for observer_id, topic_list in subscriptions.items():
+                if observer_id in self.observers:
+                    observer = self.observers[observer_id]
+                    for topic_name in topic_list:
+                        if topic_name in self.topics:
+                            topic = self.topics[topic_name]
+                            # 检查是否已经订阅
+                            if topic_name not in observer.subscribed_topics:
+                                topic.register_observer(observer)
+                                self.add_message_log(f"从配置文件加载订阅关系：观察者{observer_id}订阅主题「{topic_name}」")
+            
+            msg = "配置加载成功"
+            self.add_message_log(msg)
+            return True, msg
+        except Exception as e:
+            error_msg = f"加载配置文件失败：{str(e)}"
+            self.add_message_log(error_msg)
+            return False, error_msg
+    
+    def _clear_all_entities(self):
+        """清除所有实体"""
+        # 清除主题（需要先取消所有订阅关系）
+        for topic_name, topic in self.topics.items():
+            # 取消所有观察者的订阅
+            for observer in list(topic.observers):
+                topic.remove_observer(observer)
+        
+        # 清空所有字典
+        self.topics.clear()
+        self.producers.clear()
+        self.observers.clear()
+        
+        self.add_message_log("已清除所有现有实体")
+    
+    def get_all_entities(self):
+        """获取所有实体信息用于前端下拉选择"""
+        # 获取订阅关系
+        subscriptions = {}
+        for observer_id, observer in self.observers.items():
+            subscriptions[observer_id] = observer.subscribed_topics
+        
+        return {
+            'topics': list(self.topics.keys()),
+            'producers': list(self.producers.keys()),
+            'observers': list(self.observers.keys()),
+            'subscriptions': subscriptions
+        }
