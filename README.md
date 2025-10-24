@@ -2,6 +2,12 @@
 
 一个基于Flask和Python实现的简易消息中间件系统，采用发布-订阅（Publish-Subscribe）模式，支持主题管理、消息发布和订阅功能。
 
+[![Stargazers over time](https://starchart.cc/MortusCc/Simple_messaging_middleware_system.svg?variant=adaptive)](https://starchart.cc/MortusCc/Simple_messaging_middleware_system)
+
+[![GitHub issues](https://img.shields.io/github/issues/MortusCc/Simple_messaging_middleware_system.svg)](https://github.com/MortusCc/Simple_messaging_middleware_system/issues)
+[![GitHub forks](https://img.shields.io/github/forks/MortusCc/Simple_messaging_middleware_system.svg)](https://github.com/MortusCc/Simple_messaging_middleware_system/network)
+[![GitHub stars](https://img.shields.io/github/stars/MortusCc/Simple_messaging_middleware_system.svg)](https://github.com/MortusCc/Simple_messaging_middleware_system/stargazers)
+
 ## 项目简介
 
 本项目实现了一个简易的消息中间件系统，模拟了真实世界中消息队列的工作原理。系统提供Web界面，用户可以通过图形界面创建主题、生产者和观察者（消费者），并实现消息的发布和订阅功能。
